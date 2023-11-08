@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 hidapi = "2.4.1"
+pipewire = "0.7.2"
