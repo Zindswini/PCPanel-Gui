@@ -1,40 +1,69 @@
-pub mod knobConfig;
-
 extern crate hidapi;
 
+pub mod panel_state;
+
+use std::{thread::sleep, time::Duration};
+
 use hidapi::{HidApi, HidDevice};
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Setup instances
+    let mut panel_state = panel_state::PCPanel::new();
+
     match HidApi::new() {
         Ok(api) => {
             // make spot for device we are looking for
             let pcpanel: HidDevice = api.open(0x0483, 0xa3c4).unwrap();
             println!("Device: {:?}", pcpanel.get_device_info());
 
-            // tell the lights to turn on
+            // Testing program, update the colors and send them to the device for each mode
 
-            // print the state of the device in a loop
-            loop {
-                let mut buf = [0u8; 3];
-                pcpanel.read(&mut buf).unwrap(); // Blocking, waits until data is available
-                if buf[0] == 1 {
-                    println!("Knob {} turned to {}", buf[1], buf[2]);
+            // Testing static per-knob color
+            panel_state.knob_values[0].custom_color_data =
+                panel_state::ColorMode::StaticColor { r: 255, g: 0, b: 0 };
 
-                    // Tell LEDs to update
-                    let header = [0x06, 0x04].to_vec();
-                    let message = [0x03, 128, 255, 255, 200, 0x00, 0x01].to_vec();
-                    let full_message = [header, message.clone()].concat();
-                    pcpanel.write(&full_message)?;
-                }
-                if buf[0] == 2 {
-                    if buf[2] == 1 {
-                        println!("Button {} pressed", buf[1]);
-                    }
-                    if buf[2] == 0 {
-                        println!("Button {} released", buf[1]);
-                    }
-                }
-                //println!("State: {:?}", buf);
-            }
+            panel_state.knob_values[1].custom_color_data =
+                panel_state::ColorMode::StaticColor { r: 0, g: 255, b: 0 };
+
+            panel_state.knob_values[2].custom_color_data =
+                panel_state::ColorMode::StaticColor { r: 0, g: 0, b: 255 };
+
+            panel_state.knob_values[3].custom_color_data = panel_state::ColorMode::StaticColor {
+                r: 255,
+                g: 255,
+                b: 255,
+            };
+
+            panel_state.send_led_state(&pcpanel);
+            println!("Static per-knob color");
+            sleep(Duration::from_millis(2000));
+
+            // Testing Horizontal Rainbow Wave
+            panel_state.led_mode = panel_state::LedMode::LightAnimation;
+            panel_state.animation_type = panel_state::AnimationType::HorizontalRainbowWave;
+            panel_state.send_led_state(&pcpanel);
+            println!("Horizontal Rainbow Wave");
+            sleep(Duration::from_millis(2000));
+
+            // Testing Vertical Rainbow Wave
+            panel_state.led_mode = panel_state::LedMode::LightAnimation;
+            panel_state.animation_type = panel_state::AnimationType::VerticalRainbowWave;
+            panel_state.send_led_state(&pcpanel);
+            println!("Vertical Rainbow Wave");
+            sleep(Duration::from_millis(2000));
+
+            // Testing Breath
+            panel_state.led_mode = panel_state::LedMode::LightAnimation;
+            panel_state.animation_type = panel_state::AnimationType::Breath;
+            panel_state.send_led_state(&pcpanel);
+            println!("Breath");
+            sleep(Duration::from_millis(2000));
+
+            // set back to custom knob
+            panel_state.led_mode = panel_state::LedMode::CustomKnob;
+            panel_state.send_led_state(&pcpanel);
+
+            return Ok(());
         }
         Err(_) => todo!(),
     }
