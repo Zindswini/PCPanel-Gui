@@ -1,14 +1,22 @@
 extern crate hidapi;
+extern crate pipewire;
 
 pub mod panel_state;
 
-use std::{thread::sleep, time::Duration};
+use std::{thread::sleep, time::Duration, alloc::handle_alloc_error};
 
 use hidapi::{HidApi, HidDevice};
+use pipewire::{MainLoop, Context};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup instances
     let mut panel_state = panel_state::PCPanel::new();
+
+    // Spawn pipewire thread
+    let pw_handle = std::thread::spawn(move || {
+        run_pipewire().unwrap();
+    });
+
 
     match HidApi::new() {
         Ok(api) => {
@@ -62,9 +70,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // set back to custom knob
             panel_state.global_led_data.led_mode = panel_state::LedMode::CustomKnob;
             panel_state.send_led_state(&pcpanel);
-
-            return Ok(());
         }
         Err(_) => todo!(),
     }
+    pw_handle.join().unwrap();
+
+    Ok(())
+}
+
+fn run_pipewire() -> Result<(), Box<dyn std::error::Error>> {
+    let pw_main_loop = MainLoop::new()?;
+    let pw_context = Context::new(&pw_main_loop)?;
+    let pw_core = pw_context.connect(None)?;
+    let pw_registry = pw_core.get_registry()?;
+
+    let _listener = pw_registry
+        .add_listener_local()
+        .global(|global| println!("New global: {:?}", global))
+        .register();
+
+    pw_main_loop.run();
+
+    Ok(())
 }
