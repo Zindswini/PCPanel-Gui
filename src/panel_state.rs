@@ -19,6 +19,9 @@ impl AnimationType {
 }
 
 pub struct GlobalLedData {
+    pub led_mode: LedMode,
+    pub animation_type: AnimationType,
+
     hue: u8,
     saturation: u8,
     brightness: u8,
@@ -58,11 +61,6 @@ impl ColorMode {
         }
     }
 }
-pub struct KnobState {
-    value: u8,
-    pressed: bool,
-    pub custom_color_data: ColorMode,
-}
 
 // The overall LED mode of the panel
 pub enum LedMode {
@@ -100,79 +98,65 @@ impl DeviceType {
     }
 }
 
+pub struct IndividualLedData {
+    pub led_mode: LedMode,
+    pub custom_color_data: ColorMode,
+}
+
 pub struct PCPanel {
     device_type: DeviceType,
-    pub knob_values: [KnobState; 4],
-    pub led_mode: LedMode,
-    pub global_led_data: GlobalLedData,
-    pub animation_type: AnimationType,
+    // Store state of all inputs
+    pub knob_values: Vec<u8>,
+    pub button_values: Vec<bool>,
+    pub slider_values: Option<Vec<u8>>,
+
+    // Store state of all LEDs
+    pub global_led_data: GlobalLedData, // This stores information for an animation
+    pub individual_led_data: Vec<IndividualLedData>, // This stores information for a custom mode
 }
 
 impl PCPanel {
     // Default constructor, all leds static white
     pub fn new() -> PCPanel {
-        PCPanel {
+        let mut panel = PCPanel {
             device_type: DeviceType::Mini,
-            knob_values: [
-                KnobState {
-                    value: 0,
-                    pressed: false,
-                    custom_color_data: ColorMode::StaticColor {
-                        r: 255,
-                        g: 255,
-                        b: 255,
-                    },
-                },
-                KnobState {
-                    value: 0,
-                    pressed: false,
-                    custom_color_data: ColorMode::StaticColor {
-                        r: 255,
-                        g: 255,
-                        b: 255,
-                    },
-                },
-                KnobState {
-                    value: 0,
-                    pressed: false,
-                    custom_color_data: ColorMode::StaticColor {
-                        r: 255,
-                        g: 255,
-                        b: 255,
-                    },
-                },
-                KnobState {
-                    value: 0,
-                    pressed: false,
-                    custom_color_data: ColorMode::StaticColor {
-                        r: 255,
-                        g: 255,
-                        b: 255,
-                    },
-                },
-            ],
-            led_mode: LedMode::CustomKnob,
+            knob_values: vec![0; 4],
+            button_values: vec![false; 4],
+            slider_values: None,
             global_led_data: GlobalLedData {
-                hue: 128,
+                led_mode: LedMode::CustomKnob,
+                animation_type: AnimationType::HorizontalRainbowWave,
+                hue: 0,
                 saturation: 255,
                 brightness: 255,
-                speed: 255,
+                speed: 128,
                 reverse: false,
                 bounce: None,
             },
-            animation_type: AnimationType::HorizontalRainbowWave,
+            // create empty vector
+            individual_led_data: Vec::new(),
+        };
+
+        // Fill in LED Data
+        for i in 0..4 {
+           panel.individual_led_data.push(IndividualLedData {
+               led_mode: LedMode::CustomKnob,
+               custom_color_data: ColorMode::StaticColor { r: 255, g: 255, b: 255 },
+           });
         }
+
+        panel
     }
 
     // Update the virtual state with new HID input
     pub fn update_state_hid(&mut self, input: [u8; 3]) {
-        if input[0] == 1 {
+        if input[0] == 1 { // Knob
             println!("Knob {} turned to {}", input[1], input[2]);
-            self.knob_values[input[1] as usize].value = input[2];
+            self.knob_values[input[1] as usize] = input[2];
         }
-        if input[0] == 2 {
+        if input[0] == 2 { // Button
             println!("Knob {} changed. New state: {}", input[1], input[2]);
-            self.knob_values[input[1] as usize].pressed = input[2] == 1;
+            self.button_values[input[1] as usize] = input[2] == 1;
         }
     }
 
@@ -195,14 +179,14 @@ impl PCPanel {
 
         // Attach common data (header)
         message.push(self.device_type.to_byte());
-        message.push(self.led_mode.to_byte());
+        message.push(self.global_led_data.led_mode.to_byte());
 
         // Attach specific data
         // Each data section must be 7 bytes long + 2 bytes for header
-        match self.led_mode {
+        match self.global_led_data.led_mode {
             LedMode::LightAnimation => {
                 // Push animation type
-                message.push(self.animation_type.to_byte());
+                message.push(self.global_led_data.animation_type.to_byte());
                 // For animation modes, attach global data
                 message.push(self.global_led_data.hue);
                 message.push(self.global_led_data.saturation);
@@ -218,9 +202,9 @@ impl PCPanel {
             LedMode::CustomKnob => {
                 for i in 0..self.knob_values.len() {
                     // Push custom knob mode
-                    message.push(self.knob_values[i].custom_color_data.to_byte());
+                    message.push(self.individual_led_data[i].custom_color_data.to_byte());
                     // Push custom color data
-                    match self.knob_values[i].custom_color_data {
+                    match self.individual_led_data[i].custom_color_data {
                         ColorMode::StaticColor { r, g, b } => {
                             message.push(r);
                             message.push(g);
