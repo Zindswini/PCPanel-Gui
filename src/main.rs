@@ -19,16 +19,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Testing program, update the colors and send them to the device for each mode
 
             // Testing static per-knob color
-            panel_state.individual_led_data[0].custom_color_data =
+            panel_state.individual_led_data[0] =
                 panel_state::ColorMode::StaticColor { r: 255, g: 0, b: 0 };
 
-            panel_state.individual_led_data[1].custom_color_data =
+            panel_state.individual_led_data[1] =
                 panel_state::ColorMode::StaticColor { r: 0, g: 255, b: 0 };
 
-            panel_state.individual_led_data[2].custom_color_data =
+            panel_state.individual_led_data[2] =
                 panel_state::ColorMode::StaticColor { r: 0, g: 0, b: 255 };
 
-            panel_state.individual_led_data[3].custom_color_data = panel_state::ColorMode::StaticColor {
+            panel_state.individual_led_data[3] = panel_state::ColorMode::StaticColor {
                 r: 255,
                 g: 255,
                 b: 255,
